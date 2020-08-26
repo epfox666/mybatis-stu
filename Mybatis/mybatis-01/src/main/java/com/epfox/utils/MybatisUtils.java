@@ -20,6 +20,7 @@ public class MybatisUtils {
             e.printStackTrace();
         }
     }
+    //获取SqlSession连接
     public static SqlSession getSqlSession(){
         return sqlSessionFactory.openSession();
     }

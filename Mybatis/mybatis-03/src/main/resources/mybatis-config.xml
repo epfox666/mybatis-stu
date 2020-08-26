@@ -3,10 +3,10 @@
         PUBLIC "-//mybatis.org//DTD Config 3.0//EN"
         "http://mybatis.org/dtd/mybatis-3-config.dtd">
 <configuration>
-    <properties resource="db.properties">
-    </properties>
+    <properties resource="db.properties" />
     <typeAliases>
-        <package name="com.epfox.pojo"/>
+        <typeAlias type="com.epfox.pojo.User" alias="User"/>
+<!--        <package name="com.epfox.pojo"/>-->
     </typeAliases>
     <environments default="development">
         <environment id="development">
@@ -20,7 +20,7 @@
         </environment>
     </environments>
     <mappers>
-<!--        <mapper resource="com/epfox/dao/UserMapper.xml"/>-->
-        <mapper class="com.epfox.dao.UserMapper"/>
+        <mapper resource="com/epfox/dao/UserMapper.xml"/>
+<!--        <mapper class="com.epfox.dao.UserMapper"/>-->
     </mappers>
 </configuration>

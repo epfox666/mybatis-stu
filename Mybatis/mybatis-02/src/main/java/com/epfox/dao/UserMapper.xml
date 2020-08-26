@@ -4,7 +4,7 @@
         "http://mybatis.org/dtd/mybatis-3-mapper.dtd">
 <mapper namespace="com.epfox.dao.UserMapper">
 
-    <select id="getUserList" resultType="hello">
+    <select id="getUserList" resultType="com.epfox.pojo.User">
         select * from mybatis.user;
     </select>
 
@@ -12,9 +12,14 @@
         select * from mybatis.user where id = #{id};
     </select>
 
-    <select id="selectUserByNameLike" resultType="com.epfox.pojo.User">
-        select * from mybatis.user where name like "%"#{value}"%";
+    <select id="selectUserByNP" resultType="com.epfox.pojo.User">
+        select * from user where name=#{1} and pwd=#{2}
     </select>
+
+    <select id="selectUserByNP2" parameterType="map" resultType="com.epfox.pojo.User">
+        select * from user where name=#{username} and pwd=#{password}
+    </select>
+
 
     <insert id="addUser" parameterType="com.epfox.pojo.User">
         insert into user(id,name,pwd) values (#{id},#{name},#{pwd});
@@ -31,4 +36,12 @@
     <delete id="deleteUser" parameterType="int">
         delete from mybatis.user where id = #{id};
     </delete>
+
+    <select id="selectlike" resultType="com.epfox.pojo.User">
+        select * from mybatis.user where name like #{name};
+    </select>
+
+    <select id="selectlike2" resultType="com.epfox.pojo.User">
+        select * from mybatis.user where name like "%"#{name}"%";
+    </select>
 </mapper>
