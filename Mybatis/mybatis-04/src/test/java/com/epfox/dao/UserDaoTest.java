@@ -17,7 +17,9 @@ public class UserDaoTest {
     @Test
     public void getUserByRowBounds(){
         SqlSession sqlSession = MybatisUtils.getSqlSession();
-        RowBounds rowBounds = new RowBounds(1, 2);
+        int currentPage = 1; //第几页
+        int pageSize = 2; //每页显示几个
+        RowBounds rowBounds = new RowBounds((currentPage-1)*pageSize,pageSize);
         List<User> userList = sqlSession.selectList("com.epfox.dao.UserMapper.getUserByRowBounds", null, rowBounds);
         for (User user : userList) {
             System.out.println(user);
@@ -43,9 +45,11 @@ public class UserDaoTest {
     public void getUserByLimit(){
         SqlSession sqlSession = MybatisUtils.getSqlSession();
         UserMapper mapper = sqlSession.getMapper(UserMapper.class);
+        int currentPage = 1; //第几页
+        int pageSize = 2; //每页显示几个
         Map<String,Integer> map = new HashMap<String,Integer>();
-        map.put("startIndex",0);
-        map.put("pageSize",2);
+        map.put("startIndex",(currentPage-1)*pageSize);
+        map.put("pageSize",pageSize);
         List<User> userByLimit = mapper.getUserByLimit(map);
         for (User user : userByLimit) {
             System.out.println(user);

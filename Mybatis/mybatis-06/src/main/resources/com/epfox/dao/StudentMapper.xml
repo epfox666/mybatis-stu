@@ -34,7 +34,7 @@
     </resultMap>
 
     <select id="getTeacher" resultType="Teacher">
-        select * from teacher where id = #{tid}
+        select * from teacher where id = #{id}
     </select>
 
 

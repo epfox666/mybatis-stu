@@ -8,11 +8,11 @@ import java.util.Map;
 
 public interface UserMapper {
 
-    @Select("select * from user")
-    List<User> getUsers();
+    @Select("select id,name,pwd password from user")
+    List<User> getAllUser();
 
     @Select("select * from user where id = #{id}")
-    User getUserById(@Param("id") int id);
+    User selectUserById(@Param("id") int id);
 
     @Insert("insert into user(id,name,pwd) values (#{id},#{name},#{password})")
     int addUser(User user);

@@ -13,7 +13,7 @@
     </select>
 
     <select id="selectUserByNP" resultType="com.epfox.pojo.User">
-        select * from user where name=#{1} and pwd=#{2}
+        select * from user where name=#{username} and pwd=#{pwd}
     </select>
 
     <select id="selectUserByNP2" parameterType="map" resultType="com.epfox.pojo.User">
