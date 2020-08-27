@@ -18,7 +18,7 @@ public class MyTest {
     }
 
     @Test
-    public void testStudent(){
+    public void testStudents(){
         SqlSession sqlSession = MybatisUtils.getSqlSession();
         StudentMapper mapper = sqlSession.getMapper(StudentMapper.class);
         List<Student> studentList = mapper.getStudents();
