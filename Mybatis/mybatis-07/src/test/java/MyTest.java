@@ -11,15 +11,20 @@ import java.util.List;
 public class MyTest {
 
     @Test
-    public void test(){
-        SqlSession sqlSession = MybatisUtils.getSqlSession();
-        TeacherMapper mapper = sqlSession.getMapper(TeacherMapper.class);
-        List<Teacher> TeacherList = mapper.getTeacher();
-        for (Teacher teacher : TeacherList) {
-            System.out.println(teacher);
-        }
-        sqlSession.close();
+    public void testGetTeacher(){
+        SqlSession session = MybatisUtils.getSqlSession();
+        TeacherMapper mapper = session.getMapper(TeacherMapper.class);
+        Teacher teacher = mapper.getTeacher(1);
+        System.out.println(teacher);
+        session.close();
     }
-
+    @Test
+    public void testGetTeacher2(){
+        SqlSession session = MybatisUtils.getSqlSession();
+        TeacherMapper mapper = session.getMapper(TeacherMapper.class);
+        Teacher teacher = mapper.getTeacher2(1);
+        System.out.println(teacher);
+        session.close();
+    }
 }
 

@@ -31,8 +31,10 @@
     </environments>
 
     <mappers>
-        <mapper class="com.epfox.dao.TeacherMapper"/>
-        <mapper class="com.epfox.dao.StudentMapper"/>
+<!--        <mapper class="com.epfox.dao.TeacherMapper"/>-->
+<!--        <mapper class="com.epfox.dao.StudentMapper"/>-->
+        <mapper resource="com/epfox/dao/TeacherMapper.xml"/>
+        <mapper resource="com/epfox/dao/StudentMapper.xml"/>
     </mappers>
 
 
