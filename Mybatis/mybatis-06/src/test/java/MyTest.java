@@ -21,18 +21,18 @@ public class MyTest {
     public void testStudent(){
         SqlSession sqlSession = MybatisUtils.getSqlSession();
         StudentMapper mapper = sqlSession.getMapper(StudentMapper.class);
-        List<Student> studentList = mapper.getStudent();
+        List<Student> studentList = mapper.getStudents();
         for (Student student : studentList) {
             System.out.println(student);
-        }
         sqlSession.close();
     }
+}
 
     @Test
-    public void testStudent2(){
+    public void testStudents2(){
         SqlSession sqlSession = MybatisUtils.getSqlSession();
         StudentMapper mapper = sqlSession.getMapper(StudentMapper.class);
-        List<Student> studentList = mapper.getStudent2();
+        List<Student> studentList = mapper.getStudents2();
         for (Student student : studentList) {
             System.out.println(student);
         }

@@ -5,11 +5,10 @@
 
 <mapper namespace="com.epfox.dao.StudentMapper">
 
-
-    <select id="getStudent2" resultMap="StudentTeacher2">
-        select s.id sid,s.name sname,t.name tname
-        from student s,teacher t
-        where s.tid = t.id;
+    <select id="getStudents2" resultMap="StudentTeacher2">
+        select s.id sid, s.name sname ,t.name tname
+        from student s ,teacher t
+        where s.tid = t.id
     </select>
 
     <resultMap id="StudentTeacher2" type="Student">
@@ -22,7 +21,7 @@
 
 
 
-    <select id="getStudent" resultMap="StudentTeacher">
+    <select id="getStudents" resultMap="StudentTeacher">
         select * from student
     </select>
 
