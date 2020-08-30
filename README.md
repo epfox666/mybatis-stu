@@ -18,7 +18,7 @@
 
 ## 1、Mybatis简介
 
-![image-20200826200635932](https://i.loli.net/2020/08/26/2DysnctauKxfhbV.png)
+![image-20200830095636290](https://tva1.sinaimg.cn/large/007S8ZIlly1gi8ls0mlgyj30kw05i75k.jpg)
 
 ### 1.1、什么是MyBatis
 
@@ -307,11 +307,11 @@ public class UserDaoTest {
 
 ### 3.1、namespace
 
-​	\1. 将上面案例中的UserMapper接口改名为 UserDao； 
-
-​	\2. 将UserMapper.xml中的namespace改为为UserDao的路径 .
-
-​	\3. 再次测试
+	\1. 将上面案例中的UserMapper接口改名为 UserDao； 
+	
+	\2. 将UserMapper.xml中的namespace改为为UserDao的路径 .
+	
+	\3. 再次测试
 
 结论：
 
@@ -1014,4 +1014,1551 @@ public void testSelectUserById() {
 ```
 
 如果世界总是这么简单就好了。但是肯定不是的，数据库中，存在一对多，多对一的情况，我们之后会 使用到一些高级的结果集映射，association，collection这些，我们将在之后讲解，今天你们需要把这 些知识都消化掉才是最重要的！理解结果集映射的这个概念！
+
+## 6、分页的实现
+
+### 6.1、日志工厂
+
+思考：我们在测试SQL的时候，要是能够在控制台输出 SQL 的话，是不是就能够有更快的排错效率？
+
+如果一个 数据库相关的操作出现了问题，我们可以根据输出的SQL语句快速排查问题。
+
+对于以往的开发过程，我们会经常使用到debug模式来调节，跟踪我们的代码执行过程。但是现在使用 Mybatis是基于接口，配置文件的源代码执行过程。因此，我们必须选择日志工具来作为我们开发，调 节程序的工具。
+
+Mybatis内置的日志工厂提供日志功能，具体的日志实现有以下几种工具：
+
+- SLF4J 
+- Apache Commons Logging
+-  Log4j 2 
+- Log4j 
+- JDK logging
+
+具体选择哪个日志实现工具由MyBatis的内置日志工厂确定。它会使用最先找到的（按上文列举的顺序 查找）。 如果一个都未找到，日志功能就会被禁用。
+
+**标准日志实现**
+
+指定 MyBatis 应该使用哪个日志记录实现。如果此设置不存在，则会自动发现日志记录实现。
+
+```xml
+<settings>
+  <setting name="logImpl" value="STDOUT_LOGGING"/>
+</settings>
+```
+
+测试，可以看到控制台有大量的输出！我们可以通过这些输出来判断程序到底哪里出了Bug
+
+### 6.2、Log4j
+
+**简介：**
+
+- Log4j是Apache的一个开源项目 
+- 通过使用Log4j，我们可以控制日志信息输送的目的地：控制台，文本，GUI组件.... 
+- 我们也可以控制每一条日志的输出格式；
+- 通过定义每一条日志信息的级别，我们能够更加细致地控制日志的生成过程。最令人感兴趣的就 是，这些可以通过一个配置文件来灵活地进行配置，而不需要修改应用的代码。
+
+**使用步骤：**
+
+\1. 导入log4j的包
+
+```xml
+<dependency>
+  <groupId>log4j</groupId>
+  <artifactId>log4j</artifactId>
+  <version>1.2.17</version>
+</dependency>
+```
+
+\2. 配置文件编写
+
+```properties
+#将等级为DEBUG的日志信息输出到console和file这两个目的地，console和file的定义在下
+面的代码
+log4j.rootLogger=DEBUG,console,file
+#控制台输出的相关设置
+log4j.appender.console = org.apache.log4j.ConsoleAppender
+log4j.appender.console.Target = System.out
+log4j.appender.console.Threshold=DEBUG
+log4j.appender.console.layout = org.apache.log4j.PatternLayout
+log4j.appender.console.layout.ConversionPattern=[%c]-%m%n
+#文件输出的相关设置
+log4j.appender.file = org.apache.log4j.RollingFileAppender
+log4j.appender.file.File=./log/epfox.log
+log4j.appender.file.MaxFileSize=10mb
+log4j.appender.file.Threshold=DEBUG
+log4j.appender.file.layout=org.apache.log4j.PatternLayout
+log4j.appender.file.layout.ConversionPattern=[%p][%d{yy-MM-dd}][%c]%m%n
+#日志输出级别
+log4j.logger.org.mybatis=DEBUG
+log4j.logger.java.sql=DEBUG
+log4j.logger.java.sql.Statement=DEBUG
+log4j.logger.java.sql.ResultSet=DEBUG
+log4j.logger.java.sql.PreparedStatement=DEBUG
+```
+
+\3. setting设置日志实现
+
+```xml
+<settings>
+	<setting name="logImpl" value="LOG4J"/>
+</settings>
+```
+
+\4. 在程序中使用Log4j进行输出！
+
+```java
+//注意导包：org.apache.log4j.Logger
+static Logger logger = Logger.getLogger(MyTest.class);
+
+@Test
+public void selectUser() {
+  logger.info("info：进入selectUser方法");
+  logger.debug("debug：进入selectUser方法");
+  logger.error("error: 进入selectUser方法");
+  SqlSession session = MybatisUtils.getSession();
+  UserMapper mapper = session.getMapper(UserMapper.class);
+  List<User> users = mapper.selectUser();
+  for (User user: users){
+  	System.out.println(user);
+  }
+session.close();
+}
+```
+
+\5. 测试，看控制台输出！
+
+- 使用Log4j 输出日志
+- 可以看到还生成了一个日志的文件 【需要修改file的日志级别】
+
+### 6.3、limit实现分页
+
+**思考：为什么需要分页？**
+
+在学习mybatis等持久层框架的时候，会经常对数据进行增删改查操作，使用最多的是对数据库进行查 询操作，如果查询大量数据的时候，我们往往使用分页进行查询，也就是每次处理小部分数据，这样对 数据库压力就在可控范围内。
+
+**使用Limit实现分页**
+
+```sql
+#语法
+SELECT * FROM table LIMIT stratIndex，pageSize
+SELECT * FROM table LIMIT 5,10; // 检索记录行 6-15
+#为了检索从某一个偏移量到记录集的结束所有的记录行，可以指定第二个参数为 -1：
+SELECT * FROM table LIMIT 95,-1; // 检索记录行 96-last.
+#如果只给定一个参数，它表示返回最大的记录行数目：
+SELECT * FROM table LIMIT 5; //检索前 5 个记录行
+#换句话说，LIMIT n 等价于 LIMIT 0,n。
+```
+
+**步骤**：
+
+\1. 修改Mapper文件
+
+```xml
+<select id="getUserByLimit" parameterType="map" resultMap="UserMap">
+  select * from mybatis.user limit #{startIndex},#{pageSize}
+</select>
+```
+
+\2. Mapper接口，参数为map
+
+```java
+//选择全部用户实现分页
+List<User> getUserByLimit(Map<String,Integer> map);
+```
+
+\3. 在测试类中传入参数测试
+
+- 推断：起始位置 = （当前页面 - 1 ） * 页面大小
+
+```java
+@Test
+    public void getUserByLimit(){
+        SqlSession sqlSession = MybatisUtils.getSqlSession();
+        UserMapper mapper = sqlSession.getMapper(UserMapper.class);
+        int currentPage = 1; //第几页
+        int pageSize = 2; //每页显示几个
+        Map<String,Integer> map = new HashMap<String,Integer>();
+        map.put("startIndex",(currentPage-1)*pageSize);
+        map.put("pageSize",pageSize);
+        List<User> userByLimit = mapper.getUserByLimit(map);
+        for (User user : userByLimit) {
+            System.out.println(user);
+        }
+        sqlSession.close();
+    }
+```
+
+### 6.4、RowBounds分页
+
+我们除了使用Limit在SQL层面实现分页，也可以使用RowBounds在Java代码层面实现分页，当然此种方 式作为了解即可。我们来看下如何实现的！
+
+**步骤：**
+
+\1. mapper接口
+
+```java
+List<User> getUserByRowBounds();
+```
+
+\2. mapper文件
+
+```xml
+    <select id="getUserByRowBounds" resultMap="user">
+        select * from user
+    </select>
+```
+
+\3. 测试类
+
+- 在这里，我们需要使用RowBounds类
+
+```java
+    @Test
+    public void getUserByRowBounds(){
+        SqlSession sqlSession = MybatisUtils.getSqlSession();
+        int currentPage = 1; //第几页
+        int pageSize = 2; //每页显示几个
+        RowBounds rowBounds = new RowBounds((currentPage-1)*pageSize,pageSize);
+        List<User> userList = sqlSession.selectList("com.epfox.dao.UserMapper.getUserByRowBounds", null, rowBounds);
+        for (User user : userList) {
+            System.out.println(user);
+        }
+        sqlSession.close();
+    }
+```
+
+### 6.5、PageHelper
+
+![image-20200827141329679](https://tva1.sinaimg.cn/large/007S8ZIlgy1gi5ccg36avj30i107qab6.jpg)
+
+了解即可，可以自己尝试使用
+
+官方文档：https://pagehelper.github.io/
+
+## 7、使用注解开发
+
+### 7.1、面向接口编程
+
+- 大家之前都学过面向对象编程，也学习过接口，但在真正的开发中，很多时候我们会选择面向接口 编程
+- **根本原因 : 解耦 , 可拓展 , 提高复用 , 分层开发中 , 上层不用管具体的实现 , 大家都遵守共同的标准 , 使得开发变得容易 , 规范性更好**
+- 在一个面向对象的系统中，系统的各种功能是由许许多多的不同对象协作完成的。在这种情况下， 各个对象内部是如何实现自己的,对系统设计人员来讲就不那么重要了；
+- 而各个对象之间的协作关系则成为系统设计的关键。小到不同类之间的通信，大到各模块之间的交 互，在系统设计之初都是要着重考虑的，这也是系统设计的主要工作内容。面向接口编程就是指按 照这种思想来编程。
+
+**关于接口的理解**
+
+- 接口从更深层次的理解，应是定义（规范，约束）与实现（名实分离的原则）的分离。
+- 接口的本身反映了系统设计人员对系统的抽象理解。
+- 接口应有两类：
+  - 第一类是对一个个体的抽象，它可对应为一个抽象体(abstract class)；
+  - 第二类是对一个个体某一方面的抽象，即形成一个抽象面（interface）；
+- 一个体有可能有多个抽象面。抽象体与抽象面是有区别的。
+
+**三个面向区别**
+
+- 面向对象是指，我们考虑问题时，以对象为单位，考虑它的属性及方法 . 
+- 面向过程是指，我们考虑问题时，以一个具体的流程（事务过程）为单位，考虑它的实现 . 
+- 接口设计与非接口设计是针对复用技术而言的，与面向对象（过程）不是一个问题.更多的体现就是 对系统整体的架构
+
+### 7.2、利用注解开发
+
+- **mybatis最初配置信息是基于 XML ,映射语句(SQL)也是定义在 XML 中的。而到MyBatis 3提供了 新的基于注解的配置。不幸的是，Java 注解的的表达力和灵活性十分有限。最强大的 MyBatis 映 射并不能用注解来构建**
+
+- sql 类型主要分成 :
+  - @select () 
+  - @update () 
+  - @Insert () 
+  - @delete ()
+
+【注意】利用注解开发就不需要mapper.xml映射文件了 .
+
+\1. 我们在我们的接口中添加注解
+
+```java
+//查询全部用户
+@Select("select id,name,pwd password from user")
+public List<User> getAllUser();
+```
+
+\2. 在mybatis的核心配置文件中注入
+
+```xml
+<!--使用class绑定接口-->
+<mappers>
+	<mapper class="com.epfox.mapper.UserMapper"/>
+</mappers>
+```
+
+\3. 我们去进行测试
+
+```java
+@Test
+public void testGetAllUser(){
+  SqlSession sqlSession = MybatisUtils.getSqlSession();
+  UserMapper mapper = sqlSession.getMapper(UserMapper.class);
+  ·List<User> allUser = mapper.getAllUser();
+  for (User user : allUser) {
+    System.out.println(user);
+  }
+  sqlSession.close();
+}
+```
+
+\4. 利用Debug查看本质
+
+![image-20200827143153027](https://tva1.sinaimg.cn/large/007S8ZIlgy1gi5cvjcpwmj30it08fq5c.jpg)
+
+\5. 本质上利用了jvm的动态代理机制
+
+![image-20200827143242193](https://tva1.sinaimg.cn/large/007S8ZIlgy1gi5cwdkou7j30hm09kmy8.jpg)
+
+\6. Mybatis详细的执行流程
+
+![image-20200827143342142](https://tva1.sinaimg.cn/large/007S8ZIlgy1gi5cxepx4lj30ft0tc78o.jpg)
+
+### 7.3、注解增删改
+
+改造MybatisUtils工具类的getSession( ) 方法，重载实现。【鸡汤：多看源码实现】
+
+```java
+public static SqlSession getSqlSession(){
+  return sqlSessionFactory.openSession(true);
+}
+```
+
+【注意】确保实体类和数据库字段对应
+
+**查询：**
+
+\1. 编写接口方法注解
+
+```java
+//根据id查询用户
+@Select("select * from user where id = #{id}")
+User selectUserById(@Param("id") int id);
+```
+
+\2. 测试
+
+```java
+@Test
+public void testselectUserById(){
+  SqlSession sqlSession = MybatisUtils.getSqlSession();
+  UserMapper mapper = sqlSession.getMapper(UserMapper.class);
+  User user = mapper.selectUserById(1);
+  System.out.println(user);
+  sqlSession.close();
+}
+```
+
+**新增**：
+
+\1. 编写接口方法注解
+
+```java
+//添加一个用户
+@Insert("insert into user(id,name,pwd) values (#{id},#{name},#{password})")
+int addUser(User user);
+```
+
+\2. 测试
+
+```java
+@Test
+public void testAddUser(){
+  SqlSession sqlSession = MybatisUtils.getSqlSession();
+  UserMapper mapper = sqlSession.getMapper(UserMapper.class);
+  int user = mapper.addUser(new User(6, "eeee", "123"));
+  System.out.println(user);
+  sqlSession.close();
+}
+```
+
+**修改**：
+
+\1. 编写接口方法注解
+
+```java
+@Update("update user set name=#{name},pwd=#{password} where id = #{id}")
+int updateUser(User user);
+```
+
+\2. 测试
+
+```java
+@Test
+public void testUpdateUser(){
+  SqlSession sqlSession = MybatisUtils.getSqlSession();
+  UserMapper mapper = sqlSession.getMapper(UserMapper.class);
+  int user = mapper.updateUser(new User(6, "ffff", "12333"));
+  System.out.println(user);
+  sqlSession.close();
+}
+```
+
+**删除**：
+
+\1. 编写接口方法注解
+
+```java
+@Delete("delete from user where id = #{uid}")
+int deleteUser(@Param("uid") int id);
+```
+
+\2. 测试
+
+```java
+@Test
+public void testDeleteUser(){
+  SqlSession sqlSession = MybatisUtils.getSqlSession();
+  UserMapper mapper = sqlSession.getMapper(UserMapper.class);
+  int user = mapper.deleteUser(6);
+  System.out.println(user);
+  sqlSession.close();
+}
+```
+
+【注意点：增删改一定记得对事务的处理】
+
+### 7.4、关于@Param
+
+@Param注解用于给方法参数起一个名字。以下是总结的使用原则：
+
+- 在方法只接受一个参数的情况下，可以不使用@Param。
+- 在方法接受多个参数的情况下，建议一定要使用@Param注解给参数命名。
+- 如果参数是 JavaBean ， 则不能使用@Param。
+- 不使用@Param注解时，参数只能有一个，并且是Javabean。
+
+### 7.5、#与$的区别
+
+- \#{} 的作用主要是替换预编译语句(PrepareStatement)中的占位符? 【推荐使用】
+
+```sql
+INSERT INTO user (name) VALUES (#{name});
+INSERT INTO user (name) VALUES (?);
+```
+
+- ${} 的作用是直接进行字符串替换
+
+```sql
+INSERT INTO user (name) VALUES ('${name}');
+INSERT INTO user (name) VALUES ('epfox');
+```
+
+## 8、多对一的处理
+
+多对一的理解：
+
+- 多个学生对应一个老师
+- 如果对于学生这边，就是一个多对一的现象，即从学生这边关联一个老师！
+
+### 8.1、数据库设计
+
+![image-20200827145141213](https://tva1.sinaimg.cn/large/007S8ZIlgy1gi5dg5pjm5j30ey04umxm.jpg)
+
+```sql
+CREATE TABLE `teacher` (
+`id` INT(10) NOT NULL,
+`name` VARCHAR(30) DEFAULT NULL,
+PRIMARY KEY (`id`)
+) ENGINE=INNODB DEFAULT CHARSET=utf8
+INSERT INTO teacher(`id`, `name`) VALUES (1, 'epfox');
+CREATE TABLE `student` (
+`id` INT(10) NOT NULL,
+`name` VARCHAR(30) DEFAULT NULL,
+`tid` INT(10) DEFAULT NULL,
+PRIMARY KEY (`id`),
+KEY `fktid` (`tid`),
+CONSTRAINT `fktid` FOREIGN KEY (`tid`) REFERENCES `teacher` (`id`)
+) ENGINE=INNODB DEFAULT CHARSET=utf8
+INSERT INTO `student` (`id`, `name`, `tid`) VALUES ('1', '小明', '1');
+INSERT INTO `student` (`id`, `name`, `tid`) VALUES ('2', '小红', '1');
+INSERT INTO `student` (`id`, `name`, `tid`) VALUES ('3', '小张', '1');
+INSERT INTO `student` (`id`, `name`, `tid`) VALUES ('4', '小李', '1');
+INSERT INTO `student` (`id`, `name`, `tid`) VALUES ('5', '小王', '1');
+```
+
+### 8.2、搭建测试环境
+
+【Lombok的使用】
+
+\1. IDEA安装Lombok插件
+
+\2. 引入Maven依赖
+
+```xml
+<!-- https://mvnrepository.com/artifact/org.projectlombok/lombok -->
+<dependency>
+  <groupId>org.projectlombok</groupId>
+  <artifactId>lombok</artifactId>
+  <version>1.18.10</version>
+</dependency>
+```
+
+\3. 在代码中增加注解
+
+```java
+@Data //GET,SET,ToString，有参，无参构造
+public class Teacher {
+private int id;
+private String name;
+}
+```
+
+```java
+@Data
+public class Student {
+private int id;
+private String name;
+//多个学生可以是同一个老师，即多对一
+private Teacher teacher;
+}
+```
+
+\4. 编写实体类对应的Mapper接口 【两个】
+
+- 无论有没有需求，都应该写上，以备后来之需！
+
+```java
+public interface StudentMapper {
+}
+```
+
+```java
+public interface TeacherMapper {
+}
+```
+
+\5. 编写Mapper接口对应的 mapper.xml配置文件 【两个】
+
+- 无论有没有需求，都应该写上，以备后来之需！
+
+```xml
+<?xml version="1.0" encoding="UTF-8" ?>
+<!DOCTYPE mapper
+PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN"
+"http://mybatis.org/dtd/mybatis-3-mapper.dtd">
+<mapper namespace="com.epfox.mapper.StudentMapper">
+</mapper>
+```
+
+```xml
+<?xml version="1.0" encoding="UTF-8" ?>
+<!DOCTYPE mapper
+PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN"
+"http://mybatis.org/dtd/mybatis-3-mapper.dtd">
+<mapper namespace="com.epfox.mapper.StudentMapper">
+</mapper>
+```
+
+### 8.3、按查询嵌套处理
+
+\1. 给StudentMapper接口增加方法
+
+```java
+//获取所有学生及对应老师的信息
+public List<Student> getStudents();
+```
+
+\2. 编写对应的Mapper文件
+
+```xml
+<select id="getStudents" resultMap="StudentTeacher">
+        select * from student
+    </select>
+
+    <resultMap id="StudentTeacher" type="Student">
+        <result property="id" column="id"/>
+        <result property="name" column="name"/>
+
+        <association property="teacher" column="tid" javaType="Teacher" select="getTeacher"/>
+    </resultMap>
+
+    <select id="getTeacher" resultType="Teacher">
+        select * from teacher where id = #{id}
+    </select>
+```
+
+\3. 编写完毕去Mybatis配置文件中，注册Mapper！
+
+\4. 注意点说明：
+
+```xml
+<resultMap id="StudentTeacher" type="Student">
+<!--association关联属性 property属性名 javaType属性类型 column在多的一方
+的表中的列名-->
+<association property="teacher" column="{id=tid,name=tid}"
+javaType="Teacher" select="getTeacher"/>
+</resultMap>
+<!--
+这里传递过来的id，只有一个属性的时候，下面可以写任何值
+association中column多参数配置：
+column="{key=value,key=value}"
+其实就是键值对的形式，key是传给下个sql的取值名称，value是片段一中sql查询的字段
+名。
+-->
+<select id="getTeacher" resultType="teacher">
+select * from teacher where id = #{id} and name = #{name}
+</select>
+```
+
+\5. 测试
+
+```java
+@Test
+public void testStudents(){
+  SqlSession sqlSession = MybatisUtils.getSqlSession();
+  StudentMapper mapper = sqlSession.getMapper(StudentMapper.class);
+  List<Student> studentList = mapper.getStudents();
+  for (Student student : studentList) {
+    System.out.println(student);
+    sqlSession.close();
+  }
+```
+
+### 8.4 、按结果嵌套处理
+
+除了上面这种方式，还有其他思路吗？
+
+我们还可以按照结果进行嵌套处理；
+
+\1. 接口方法编写
+
+```java
+public List<Student> getStudents2();
+```
+
+\2. 编写对应的mapper文件
+
+```xml
+<select id="getStudents2" resultMap="StudentTeacher2">
+        select s.id sid, s.name sname ,t.name tname
+        from student s ,teacher t
+        where s.tid = t.id
+    </select>
+
+    <resultMap id="StudentTeacher2" type="Student">
+        <result property="id" column="sid"/>
+        <result property="name" column="sname"/>
+        <association property="teacher" javaType="Teacher">
+            <result property="name" column="tname"/>
+        </association>
+    </resultMap>
+```
+
+\3. 去mybatis-config文件中注入【此处应该处理过了】
+
+\4. 测试
+
+```java
+@Test
+public void testStudents2(){
+  SqlSession sqlSession = MybatisUtils.getSqlSession();
+  StudentMapper mapper = sqlSession.getMapper(StudentMapper.class);
+  List<Student> studentList = mapper.getStudents2();
+  for (Student student : studentList) {
+    System.out.println(student);
+  }
+  sqlSession.close();
+}
+```
+
+### 8.5、小结
+
+- 按照查询进行嵌套处理就像SQL中的子查询 
+- 按照结果进行嵌套处理就像SQL中的联表查询
+
+## 9、一对多的处理
+
+一对多的理解：
+
+- 一个老师拥有多个学生 
+- 如果对于老师这边，就是一个一对多的现象，即从一个老师下面拥有一群学生（集合）！
+
+### 9.1、实体类编写
+
+```java
+@Data
+public class Student {
+private int id;
+private String name;
+private int tid;
+}
+```
+
+```java
+@Data
+public class Teacher {
+private int id;
+private String name;
+//一个老师多个学生
+private List<Student> students;
+}
+```
+
+### 9.2、按结果嵌套处理
+
+\1. TeacherMapper接口编写方法
+
+```java
+//获取指定老师，及老师下的所有学生
+public Teacher getTeacher(int id);
+```
+
+\2. 编写接口对应的Mapper配置文件
+
+```java
+<mapper namespace="com.epfox.dao.TeacherMapper">
+    <select id="getTeacher" resultMap="TeacherStudent">
+        select s.id sid, s.name sname ,t.name tname, t.id tid
+        from student s ,teacher t
+        where s.tid = t.id and t.id=#{id}
+    </select>
+    <resultMap id="TeacherStudent" type="Teacher">
+        <result property="name" column="tname"/>
+        <collection property="students" ofType="Student">
+            <result property="id" column="sid"/>
+            <result property="name" column="sname"/>
+            <result property="tid" column="tid"/>
+        </collection>
+    </resultMap>
+</mapper>
+```
+
+\3. 将Mapper文件注册到MyBatis-config文件中
+
+```xml
+<mappers>
+<mapper resource="mapper/TeacherMapper.xml"/>
+</mappers>
+```
+
+\4. 测试
+
+```java
+@Test
+public void testGetTeacher(){
+    SqlSession session = MybatisUtils.getSqlSession();
+    TeacherMapper mapper = session.getMapper(TeacherMapper.class);
+    Teacher teacher = mapper.getTeacher(1);
+    System.out.println(teacher);
+    session.close();
+}
+```
+
+### 9.3、按查询嵌套处理
+
+\1. TeacherMapper接口编写方法
+
+```java
+public Teacher getTeacher2(int id);
+```
+
+\2. 编写接口对应的Mapper配置文件
+
+```xml
+<select id="getTeacher2" resultMap="TeacherStudent2">
+    select * from teacher where id = #{id}
+</select>
+
+<resultMap id="TeacherStudent2" type="Teacher">
+    <collection property="students" javaType="ArrayList" ofType="Student"
+                column="id" select="getStudentByTeacherId" />
+</resultMap>
+
+<select id="getStudentByTeacherId" resultType="Student">
+    select * from student where tid = #{id}
+</select>
+```
+
+\3. 将Mapper文件注册到MyBatis-config文件中
+
+\4. 测试
+
+```java
+@Test
+public void testGetTeacher2(){
+    SqlSession session = MybatisUtils.getSqlSession();
+    TeacherMapper mapper = session.getMapper(TeacherMapper.class);
+    Teacher teacher = mapper.getTeacher2(1);
+    System.out.println(teacher);
+    session.close();
+}
+```
+
+### 9.4、小结
+
+\1. 关联-association 
+
+\2. 集合-collection 
+
+\3. 所以association是用于一对一和多对一，而collection是用于一对多的关系 
+
+\4. JavaType和ofType都是用来指定对象类型的 
+
+- JavaType是用来指定pojo中属性的类型 
+- ofType指定的是映射到list集合属性中pojo的类型。
+
+注意说明：
+
+\1. 保证SQL的可读性，尽量通俗易懂 
+
+\2. 根据实际要求，尽量编写性能更高的SQL语句 
+
+\3. 注意属性名和字段不一致的问题 
+
+\4. 注意一对多和多对一 中：字段和属性对应的问题 
+
+\5. 尽量使用Log4j，通过日志来查看自己的错误
+
+## 10、动态SQL
+
+[官方文档](http://www.mybatis.org/mybatis-3/zh/dynamic-sql.html)
+
+### 10.1、介绍
+
+什么是动态SQL：**动态SQL指的是根据不同的查询条件 , 生成不同的Sql语句.**
+
+```xml
+官网描述：
+MyBatis 的强大特性之一便是它的动态 SQL。如果你有使用 JDBC 或其它类似框架的经验，你
+就能体会到根据不同条件拼接 SQL 语句的痛苦。例如拼接时要确保不能忘记添加必要的空格，还要注意
+去掉列表最后一个列名的逗号。利用动态 SQL 这一特性可以彻底摆脱这种痛苦。
+虽然在以前使用动态 SQL 并非一件易事，但正是 MyBatis 提供了可以被用在任意 SQL 映射语
+句中的强大的动态 SQL 语言得以改进这种情形。
+动态 SQL 元素和 JSTL 或基于类似 XML 的文本处理器相似。在 MyBatis 之前的版本中，有
+很多元素需要花时间了解。MyBatis 3 大大精简了元素种类，现在只需学习原来一半的元素便可。
+MyBatis 采用功能强大的基于 OGNL 的表达式来淘汰其它大部分元素。
+-------------------------------
+- if
+- choose (when, otherwise)
+- trim (where, set)
+- foreach
+-------------------------------
+```
+
+我们之前写的 SQL 语句都比较简单，如果有比较复杂的业务，我们需要写复杂的 SQL 语句，往往需 要拼接，而拼接 SQL ，稍微不注意，由于引号，空格等缺失可能都会导致错误。
+
+那么怎么去解决这个问题呢？这就要使用 mybatis 动态SQL，通过 if, choose, when, otherwise, trim, where, set, foreach等标签，可组合成非常灵活的SQL语句，从而在提高 SQL 语句的准确性的同 时，也大大提高了开发人员的效率。
+
+### 10.2、搭建环境
+
+**新建一个数据库表：blog**
+
+字段：id，title，author，create_time，views
+
+```sql
+CREATE TABLE `blog` (
+`id` varchar(50) NOT NULL COMMENT '博客id',
+`title` varchar(100) NOT NULL COMMENT '博客标题',
+`author` varchar(30) NOT NULL COMMENT '博客作者',
+`create_time` datetime NOT NULL COMMENT '创建时间',
+`views` int(30) NOT NULL COMMENT '浏览量'
+) ENGINE=InnoDB DEFAULT CHARSET=utf8
+```
+
+\1. 创建Mybatis基础工程
+
+![image-20200828180839160](https://tva1.sinaimg.cn/large/007S8ZIlgy1gi6orffiahj30i00k00u8.jpg)
+
+\2. IDutil工具类
+
+```java
+public class IDutils {
+    public static String getID(){
+        return UUID.randomUUID().toString().replace("-","");
+    }
+
+    public static void main(String[] args) {
+
+    }
+
+
+}
+```
+
+\3. 实体类编写 【注意set方法作用】
+
+```java
+package com.epfox.pojo;
+
+import lombok.Data;
+
+import java.util.Date
+
+@Data
+public class Blog {
+    private String id;
+    private String title;
+    private String author;
+    private Date createTime;
+    private int views;
+}
+
+```
+
+\4. 编写Mapper接口及xml文件
+
+```xml
+public interface BlogMapper {}
+```
+
+```xml
+<?xml version="1.0" encoding="UTF-8" ?>
+<!DOCTYPE mapper
+        PUBLIC "-//mybatis.org//DTD Config 3.0//EN"
+        "http://mybatis.org/dtd/mybatis-3-mapper.dtd">
+
+<mapper namespace="com.epfox.dao.BlogMapper">
+</mapper>
+```
+
+\5. mybatis核心配置文件，下划线驼峰自动转换
+
+```xml
+<settings>
+    <setting name="logImpl" value="STDOUT_LOGGING"/>
+    <setting name="mapUnderscoreToCamelCase" value="true"/>
+</settings>
+<mappers>
+  <mapper class="com.epfox.dao.BlogMapper"/>
+</mappers>
+```
+
+\6. 插入初始数据
+
+编写接口
+
+```java
+int addBlog(Blog blog);
+```
+
+sql配置文件
+
+```xml
+<insert id="addBlog" parameterType="blog">
+    insert into blog (id, title, author, create_time, views)
+    values (#{id},#{title},#{author},#{createTime},#{views});
+</insert>
+```
+
+初始化博客方法
+
+```java
+@Test
+public void addInitBlog(){
+    SqlSession session = MybatisUtils.getSqlSession();
+    BlogMapper mapper = session.getMapper(BlogMapper.class);
+    Blog blog = new Blog();
+    blog.setId(IDutils.getID());
+    blog.setTitle("Mybatis如此简单");
+    blog.setAuthor("epfox");
+    blog.setCreateTime(new Date());
+    blog.setViews(9999);
+    mapper.addBlog(blog);
+    blog.setId(IDutils.getID());
+    blog.setTitle("Java如此简单");
+    mapper.addBlog(blog);
+    blog.setId(IDutils.getID());
+    blog.setTitle("Spring如此简单");
+    mapper.addBlog(blog);
+    blog.setId(IDutils.getID());
+    blog.setTitle("微服务如此简单");
+    mapper.addBlog(blog);
+    session.close();
+}
+```
+
+### 10.3、if 语句
+
+**需求：根据作者名字和博客名字来查询博客！如果作者名字为空，那么只根据博客名字查询，反之，则 根据作者名来查询**
+
+\1. 编写接口类
+
+```java
+List<Blog> queryBlogIF(Map map);
+```
+
+\2. 编写SQL语句
+
+```xml
+<select id="queryBlogIF" parameterType="map" resultType="blog">
+    select * from blog where
+        <if test="title != null">
+        	title = #{title}
+        </if>
+        <if test="author != null">
+        	and author = #{author}
+        </if>
+</select>
+```
+
+\3. 测试
+
+```java
+@Test
+public void queryBlogIF(){
+    SqlSession sqlSession = MybatisUtils.getSqlSession();
+    BlogMapper mapper = sqlSession.getMapper(BlogMapper.class);
+    HashMap map = new HashMap();
+    map.put("title","Mybatis如此简单2");
+    map.put("author","狂神说2");
+    List<Blog> blogs = mapper.queryBlogIF(map);
+    for (Blog blog : blogs) {
+        System.out.println(blog);
+    }
+
+    sqlSession.close();
+
+}
+```
+
+这样写我们可以看到，如果 author 等于 null，那么查询语句为 select * from user where title=#{title}, 但是如果title为空呢？那么查询语句为 select * from user where and author=#{author}，这是错误的 SQL 语句，如何解决呢？请看下面的 where 语句！
+
+### 10.4、Where
+
+修改上面的SQL语句
+
+```xml
+<select id="queryBlogIF" parameterType="map" resultType="blog">
+    select * from blog
+    <where>
+        <if test="title != null">
+        	title = #{title}
+        </if>
+        <if test="author != null">
+        	and author = #{author}
+        </if>
+    </where>
+</select>
+```
+
+这个“where”标签会知道如果它包含的标签中有返回值的话，它就插入一个‘where’。此外，如果标签返 回的内容是以AND 或OR 开头的，则它会剔除掉。【这是我们使用的最多的案例】
+
+### 10.5、Set
+
+同理，上面的对于查询 SQL 语句包含 where 关键字，如果在进行更新操作的时候，含有 set 关键词， 我们怎么处理呢？
+
+\1. 编写接口方法
+
+```java
+int updateBlog(Map map);
+```
+
+\2. sql配置文件
+
+```xml
+<update id="updateBlog" parameterType="map">
+    update blog
+    <set>
+        <if test="title !=null">
+            title = #{title},
+        </if>
+        <if test="author !=null">
+            author = #{author}
+        </if>
+    </set>
+    where id = #{id}
+</update>
+```
+
+\3. 测试
+
+```java
+    public void updateBlog(){
+        SqlSession sqlSession = MybatisUtils.getSqlSession();
+        BlogMapper mapper = sqlSession.getMapper(BlogMapper.class);
+        HashMap map = new HashMap();
+        map.put("title","Mybatis如此简单2");
+        map.put("author","epfox2");
+//        map.put("views",9999);
+        map.put("id","13b62481cee94d9ca1ba139d96407402");
+        mapper.updateBlog(map);
+        sqlSession.close();
+
+    }
+```
+
+### 10.6、choose语句
+
+有时候，我们不想用到所有的查询条件，只想选择其中的一个，查询条件有一个满足即可，使用 choose 标签可以解决此类问题，类似于 Java 的 switch 语句
+
+\1. 编写接口方法
+
+```java
+List<Blog> queryBlogChoose(Map map);
+```
+
+\2. sql配置文件
+
+```xml
+<select id="queryBlogChoose" parameterType="map" resultType="blog">
+    select * from blog
+    <where>
+        <choose>
+            <when test="title!=null">
+                title = #{title}
+            </when>
+            <when test="author!=null">
+                and author = #{author}
+            </when>
+            <otherwise>
+                and views = #{views}
+            </otherwise>
+        </choose>
+    </where>
+</select>
+```
+
+\3. 测试类
+
+```
+    @Test
+    public void queryBlogChoose(){
+        SqlSession sqlSession = MybatisUtils.getSqlSession();
+        BlogMapper mapper = sqlSession.getMapper(BlogMapper.class);
+        HashMap map = new HashMap();
+//        map.put("title","Mybatis如此简单");
+        map.put("author","epfox");
+        map.put("views",9999);
+        List<Blog> blogs = mapper.queryBlogChoose(map);
+        for (Blog blog : blogs) {
+            System.out.println(blog);
+        }
+
+        sqlSession.close();
+
+    }
+```
+
+### 10.7、SQL片段
+
+有时候可能某个 sql 语句我们用的特别多，为了增加代码的重用性，简化代码，我们需要将这些代码抽 取出来，然后使用时直接调用。
+
+提取SQL片段：
+
+```xml
+<sql id="if-title-author">
+    <if test="title != null">
+        and title = #{title}
+    </if>
+    <if test="author != null">
+        and author = #{author}
+    </if>
+</sql>
+```
+
+引用SQL片段：
+
+```xml
+<select id="queryBlogIF" parameterType="map" resultType="blog">
+    select * from blog
+    <where>
+        <include refid="if-title-author"></include>
+    </where>
+</select>
+```
+
+注意：①、最好基于 单表来定义 sql 片段，提高片段的可重用性
+
+​			②、在 sql 片段中不要包括 where
+
+### 10.8、Foreach
+
+将数据库中前三个数据的id修改为1,2,3； 
+
+需求：我们需要查询 blog 表中 id 分别为1,2,3的博客信息
+
+\1. 编写接口
+
+```java
+List<Blog> queryBlogForeach(Map map);
+```
+
+\2. 编写SQL语句
+
+```sql
+select * from blog where 1=1 and (id=1 or id=2 or id=3)
+```
+
+```xml
+<select id="queryBlogForeach" parameterType="map" resultType="blog">
+    select * from blog
+    <where>
+        <foreach collection="ids" item="id" open="and (" close=")" separator="or">
+            id = #{id}
+        </foreach>
+    </where>
+</select>
+```
+
+\3. 测试
+
+```java
+@Test
+public void queryBlogForeach(){
+    SqlSession sqlSession = MybatisUtils.getSqlSession();
+    BlogMapper mapper = sqlSession.getMapper(BlogMapper.class);
+    HashMap map = new HashMap();
+    ArrayList<Integer> ids = new ArrayList<Integer>();
+    ids.add(1);
+    ids.add(2);
+    map.put("ids",ids);
+    List<Blog> blogs = mapper.queryBlogForeach(map);
+    for (Blog blog : blogs) {
+        System.out.println(blog);
+    }
+    sqlSession.close();
+}
+```
+
+小结：其实动态 sql 语句的编写往往就是一个拼接的问题，为了保证拼接准确，我们最好首先要写原生 的 sql 语句出来，然后在通过 mybatis 动态sql 对照着改，防止出错。多在实践中使用才是熟练掌握它 的技巧
+
+## 11、缓存
+
+### 11.1、简介
+
+\1. 什么是缓存 [ Cache ]？
+
+- 存在内存中的临时数据。
+- 将用户经常查询的数据放在缓存（内存）中，用户去查询数据就不用从磁盘上(关系型数据库 数据文件)查询，从缓存中查询，从而提高查询效率，解决了高并发系统的性能问题。
+
+\2. 为什么使用缓存？
+
+- 减少和数据库的交互次数，减少系统开销，提高系统效率。
+
+\3. 什么样的数据能使用缓存？
+
+- 经常查询并且不经常改变的数据。
+
+### 11.2、Mybatis缓存
+
+- MyBatis包含一个非常强大的查询缓存特性，它可以非常方便地定制和配置缓存。缓存可以极大的 提升查询效率。
+- MyBatis系统中默认定义了两级缓存：**一级缓存和二级缓存**
+  - 默认情况下，只有一级缓存开启。（SqlSession级别的缓存，也称为本地缓存） 
+  - 二级缓存需要手动开启和配置，他是基于namespace级别的缓存。 
+  - 为了提高扩展性，MyBatis定义了缓存接口Cache。我们可以通过实现Cache接口来自定义二 级缓存
+
+### 11.3、一级缓存
+
+- 一级缓存也叫本地缓存：
+  - 与数据库同一次会话期间查询到的数据会放在本地缓存中。
+  - 以后如果需要获取相同的数据，直接从缓存中拿，没必须再去查询数据库；
+
+#### 11.3.1、初体验测试
+
+\1. 在mybatis中加入日志，方便测试结果
+
+\2. 编写接口方法
+
+```java
+//根据id查询用户
+User queryUsersById(int id);
+```
+
+\3. 接口对应的Mapper文件
+
+```xml
+<select id="queryUsersById" resultType="user">
+	select * from user where id = #{id}
+</select>
+```
+
+\4. 测试
+
+```java
+    @Test
+    public void queryUsersById(){
+        SqlSession sqlSession = MybatisUtils.getSqlSession();
+        UserMapper mapper = sqlSession.getMapper(UserMapper.class);
+        User user1 = mapper.queryUsersById(1);
+        System.out.println(user1);
+
+        System.out.println("==============================");
+
+        User user2 = mapper.queryUsersById(1);
+        System.out.println(user2);
+
+        System.out.println(user1==user2);
+        sqlSession.close();
+    }
+```
+
+\5. 结果分析
+
+![image-20200830093551474](https://tva1.sinaimg.cn/large/007S8ZIlly1gi8l6h5o74j31660jewhb.jpg)
+
+#### 11.3.2、一级缓存失效的四种情况
+
+- 一级缓存是SqlSession级别的缓存，是一直开启的，我们关闭不了它；
+
+- 一级缓存失效情况：没有使用到当前的一级缓存，效果就是，还需要再向数据库中发起一次查询请 求！
+
+  \1. sqlSession不同
+
+  ```java
+  @Test
+  public void testQueryUserById(){
+  SqlSession session = MybatisUtils.getSession();
+  SqlSession session2 = MybatisUtils.getSession();
+  UserMapper mapper = session.getMapper(UserMapper.class);
+  UserMapper mapper2 = session2.getMapper(UserMapper.class);
+  User user = mapper.queryUsersById(1);
+  System.out.println(user);
+  User user2 = mapper2.queryUsersById(1);
+  System.out.println(user2);
+  System.out.println(user==user2);
+  session.close();
+  session2.close();
+  }
+  ```
+
+观察结果：发现发送了两条SQL语句！ 
+
+结论：**每个sqlSession中的缓存相互独立**
+
+​		\2. sqlSession相同，查询条件不同
+
+```java
+@Test
+public void testQueryUserById(){
+SqlSession session = MybatisUtils.getSession();
+UserMapper mapper = session.getMapper(UserMapper.class);
+UserMapper mapper2 = session.getMapper(UserMapper.class);
+User user = mapper.queryUsersById(1);
+System.out.println(user);
+User user2 = mapper2.queryUsersById(2);
+System.out.println(user2);
+System.out.println(user==user2);
+session.close();
+}
+```
+
+观察结果：发现发送了两条SQL语句！很正常的理解 
+
+结论：**当前缓存中，不存在这个数据**
+
+\3. sqlSession相同，两次查询之间执行了增删改操作！
+
+- 增加方法
+
+```java
+//修改用户
+int updateUser(Map map);
+```
+
+- 编写SQL
+
+```xml
+<update id="updateUser" parameterType="map">
+	update user set name = #{name} where id = #{id}
+</update>
+```
+
+- 测试
+
+```java
+    @Test
+    public void queryUsersById2(){
+        SqlSession sqlSession = MybatisUtils.getSqlSession();
+        UserMapper mapper = sqlSession.getMapper(UserMapper.class);
+        User user1 = mapper.queryUsersById(1);
+        System.out.println(user1);
+        mapper.updateUser(new User(2,"epfox666","666"));
+        System.out.println("==============================");
+        User user2 = mapper.queryUsersById(1);
+        System.out.println(user2);
+
+        System.out.println(user1==user2);
+        sqlSession.close();
+    }
+```
+
+观察结果：查询在中间执行了增删改操作后，重新执行了 
+
+结论：**因为增删改操作可能会对当前数据产生影响**
+
+\4. sqlSession相同，手动清除一级缓存
+
+```java
+    @Test
+    public void queryUsersById3(){
+        SqlSession sqlSession = MybatisUtils.getSqlSession();
+        UserMapper mapper = sqlSession.getMapper(UserMapper.class);
+        User user1 = mapper.queryUsersById(1);
+        System.out.println(user1);
+//        mapper.updateUser(new User(2,"epfox666","666"));
+        sqlSession.clearCache();
+        System.out.println("==============================");
+        User user2 = mapper.queryUsersById(1);
+        System.out.println(user2);
+
+        System.out.println(user1==user2);
+        sqlSession.close();
+    }
+```
+
+一级缓存就是一个map
+
+### 11.4、二级缓存
+
+- 二级缓存也叫全局缓存，一级缓存作用域太低了，所以诞生了二级缓存
+- 基于namespace级别的缓存，一个名称空间，对应一个二级缓存；
+- 工作机制
+  - 一个会话查询一条数据，这个数据就会被放在当前会话的一级缓存中；
+  -  如果当前会话关闭了，这个会话对应的一级缓存就没了；但是我们想要的是，会话关闭了，一 级缓存中的数据被保存到二级缓存中； 
+  - 新的会话查询信息，就可以从二级缓存中获取内容； 
+  - 不同的mapper查出的数据会放在自己对应的缓存（map）中；
+
+#### 11.4.1、使用步骤
+
+[官方文档](https://mybatis.org/mybatis-3/zh/sqlmap-xml.html#cache)
+
+\1. 开启全局缓存 【mybatis-config.xml】
+
+```xml
+<setting name="cacheEnabled" value="true"/>
+```
+
+\2. 去每个mapper.xml中配置使用二级缓存，这个配置非常简单；【xxxMapper.xml】
+
+```xml
+<cache/>
+官方示例=====>查看官方文档
+<cache
+eviction="FIFO"
+flushInterval="60000"
+size="512"
+readOnly="true"/>
+这个更高级的配置创建了一个 FIFO 缓存，每隔 60 秒刷新，最多可以存储结果对象或列表的
+512 个引用，而且返回的对象被认为是只读的，因此对它们进行修改可能会在不同线程中的调用者
+产生冲突。
+```
+
+\3. 代码测试
+
+- 所有的实体类先实现序列化接口
+- 测试代码
+
+```java
+@Test
+public void testQueryUserById(){
+SqlSession session = MybatisUtils.getSession();
+SqlSession session2 = MybatisUtils.getSession();
+UserMapper mapper = session.getMapper(UserMapper.class);
+UserMapper mapper2 = session2.getMapper(UserMapper.class);
+User user = mapper.queryUsersById(1);
+System.out.println(user);
+session.close();
+User user2 = mapper2.queryUsersById(1);
+System.out.println(user2);
+System.out.println(user==user2);
+session2.close();
+}
+```
+
+#### 11.4.2、结论
+
+- 只要开启了二级缓存，我们在同一个Mapper中的查询，可以在二级缓存中拿到数据 
+- 查出的数据都会被默认先放在一级缓存中
+- 只有会话提交或者关闭以后，一级缓存中的数据才会转到二级缓存中
+
+### 11.5、缓存原理
+
+![image-20200830094915273](https://tva1.sinaimg.cn/large/007S8ZIlly1gi8lkda8mbj31dc0s07o5.jpg)
+
+### 11.6、EhCache
+
+第三方缓存实现--EhCache: 查看百度百科
+
+- [官方文档](http://mybatis.org/ehcache-cache/)
+
+- Ehcache是一种广泛使用的java分布式缓存，用于通用缓存；
+
+- 要在应用程序中使用Ehcache，需要引入依赖的jar包
+
+```xml
+<!-- https://mvnrepository.com/artifact/org.mybatis.caches/mybatisehcache -->
+<dependency>
+  <groupId>org.mybatis.caches</groupId>
+  <artifactId>mybatis-ehcache</artifactId>
+  <version>1.1.0</version>
+</dependency>
+```
+
+- 在mapper.xml中使用对应的缓存即可
+
+```xml
+<mapper namespace="com.epfox.dao.UserMapper">
+        <cache type="org.mybatis.caches.ehcache.EhcacheCache"/>
+```
+
+- 编写ehcache.xml文件，如果在 加载时 未找到 /ehcache.xml 资源或出现问题，则将使用默 认配置。
+
+```xml
+<?xml version="1.0" encoding="UTF-8"?>
+<ehcache xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+         xsi:noNamespaceSchemaLocation="http://ehcache.org/ehcache.xsd"
+         updateCheck="false">
+    <!--
+    diskStore：为缓存路径，ehcache分为内存和磁盘两级，此属性定义磁盘的缓存位
+    置。参数解释如下：
+    user.home – 用户主目录
+    user.dir – 用户当前工作目录
+    java.io.tmpdir – 默认临时文件路径
+    -->
+    <diskStore path="./tmpdir/Tmp_EhCache"/>
+    <defaultCache
+            eternal="false"
+            maxElementsInMemory="10000"
+            overflowToDisk="false"
+            diskPersistent="false"
+            timeToIdleSeconds="1800"
+            timeToLiveSeconds="259200"
+            memoryStoreEvictionPolicy="LRU"/>
+    <cache
+            name="cloud_user"
+            eternal="false"
+            maxElementsInMemory="5000"
+            overflowToDisk="false"
+            diskPersistent="false"
+            timeToIdleSeconds="1800"
+            timeToLiveSeconds="1800"
+            memoryStoreEvictionPolicy="LRU"/>
+    <!--
+    defaultCache：默认缓存策略，当ehcache找不到定义的缓存时，则使用这个缓存策
+    略。只能定义一个。
+    -->
+    <!--
+    name:缓存名称。
+    maxElementsInMemory:缓存最大数目
+    maxElementsOnDisk：硬盘最大缓存个数。
+    eternal:对象是否永久有效，一但设置了，timeout将不起作用。
+    overflowToDisk:是否保存到磁盘，当系统当机时
+    timeToIdleSeconds:设置对象在失效前的允许闲置时间（单位：秒）。仅当
+    eternal=false对象不是永久有效时使用，可选属性，默认值是0，也就是可闲置时间无穷大。
+    timeToLiveSeconds:设置对象在失效前允许存活时间（单位：秒）。最大时间介于创建
+    时间和失效时间之间。仅当eternal=false对象不是永久有效时使用，默认是0.，也就是对象存
+    活时间无穷大。
+    diskPersistent：是否缓存虚拟机重启期数据 Whether the disk store
+    persists between restarts of the Virtual Machine. The default value is
+    false.
+    diskSpoolBufferSizeMB：这个参数设置DiskStore（磁盘缓存）的缓存区大小。默
+    认是30MB。每个Cache都应该有自己的一个缓冲区。
+    diskExpiryThreadIntervalSeconds：磁盘失效线程运行时间间隔，默认是120秒。
+    memoryStoreEvictionPolicy：当达到maxElementsInMemory限制时，Ehcache将
+    会根据指定的策略去清理内存。默认策略是LRU（最近最少使用）。你可以设置为FIFO（先进先
+    出）或是LFU（较少使用）。
+    clearOnFlush：内存数量最大时是否清除。
+    memoryStoreEvictionPolicy:可选策略有：LRU（最近最少使用，默认策略）、
+    FIFO（先进先出）、LFU（最少访问次数）。
+    FIFO，first in first out，这个是大家最熟的，先进先出。
+    LFU， Less Frequently Used，就是上面例子中使用的策略，直白一点就是讲一直以
+    来最少被使用的。如上面所讲，缓存的元素有一个hit属性，hit值最小的将会被清出缓存。
+    LRU，Least Recently Used，最近最少使用的，缓存的元素有一个时间戳，当缓存容
+    量满了，而又需要腾出地方来缓存新的元素的时候，那么现有缓存元素中时间戳离当前时间最远的
+    元素将被清出缓存。
+    -->
+</ehcache>
+
+```
+
 
